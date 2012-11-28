@@ -1,0 +1,8 @@
+cwm from openbsd cvs 
+Makefile adapted for linux
+missing bsd functions are added 
+	strl* and queue.h from OpenBSD CVS
+	fgetln from netbsd pkgsrc
+last sync -  Tue Nov 27 17:51:43 GMT 2012
+builds, works and was tested on amd64 debian-testing
+

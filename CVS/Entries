@@ -1,0 +1,27 @@
+/headers.h/1.10/Sun Apr 12 23:51:10 2009//
+/queue.h/0/dummy timestamp//
+/strlcat.c/0/dummy timestamp//
+/strlcpy.c/0/dummy timestamp//
+/fgetln.c/0/dummy timestamp//
+/strtonum.c/0/dummy timestamp//
+/LICENSE/1.2/Tue Oct 20 07:49:32 2009//
+/Makefile/1.19/Result of merge+Mon Nov 26 13:26:30 2012//
+/calmwm.c/1.67/Result of merge//
+/calmwm.h/1.159/Result of merge+Mon Nov 26 13:26:31 2012//
+/client.c/1.103/Result of merge//
+/conf.c/1.109/Result of merge//
+/cwm.1/1.48/Mon Nov 26 13:26:31 2012//
+/cwmrc.5/1.48/Mon Nov 26 13:26:31 2012//
+/font.c/1.19/Result of merge//
+/group.c/1.63/Result of merge//
+/kbfunc.c/1.68/Result of merge//
+/menu.c/1.45/Result of merge//
+/mousefunc.c/1.40/Result of merge//
+/parse.y/1.34/Mon Nov 26 13:26:31 2012//
+/screen.c/1.37/Result of merge//
+/search.c/1.26/Result of merge//
+/util.c/1.16/Result of merge//
+/xevents.c/1.69/Result of merge//
+/xmalloc.c/1.10/Result of merge//
+/xutil.c/1.49/Result of merge//
+D
