@@ -36,6 +36,7 @@ cwm: $(OBJS)
 
 clean:
 	-rm *.o parse.c
+	-rm cwm
 parse.c:
 	byacc -o parse.c parse.y 
 
