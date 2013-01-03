@@ -16,7 +16,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: group.c,v 1.65 2012/12/17 14:32:39 okan Exp $
+ * $OpenBSD: group.c,v 1.68 2013/01/01 14:50:01 okan Exp $
  */
 
 #include <sys/param.h>
@@ -132,7 +132,7 @@ group_show(struct screen_ctx *sc, struct group_ctx *gc)
 	free(winlist);
 
 	gc->hidden = 0;
-	group_setactive(sc, gc->shortcut - 1);
+	group_setactive(sc, gc->shortcut);
 }
 
 void
@@ -151,7 +151,7 @@ group_init(struct screen_ctx *sc)
 	for (i = 0; i < CALMWM_NGROUPS; i++) {
 		TAILQ_INIT(&sc->groups[i].clients);
 		sc->groups[i].hidden = 0;
-		sc->groups[i].shortcut = i + 1;
+		sc->groups[i].shortcut = i;
 		TAILQ_INSERT_TAIL(&sc->groupq, &sc->groups[i], entry);
 	}
 
@@ -218,16 +218,14 @@ void
 group_sticky_toggle_enter(struct client_ctx *cc)
 {
 	struct screen_ctx	*sc = cc->sc;
-	struct group_ctx	*gc;
-
-	gc = sc->group_active;
+	struct group_ctx	*gc = sc->group_active;
 
 	if (gc == cc->group) {
 		group_remove(cc);
-		cc->highlight = CLIENT_HIGHLIGHT_UNGROUP;
+		cc->flags |= CLIENT_UNGROUP;
 	} else {
 		group_add(gc, cc);
-		cc->highlight = CLIENT_HIGHLIGHT_GROUP;
+		cc->flags |= CLIENT_GROUP;
 	}
 
 	client_draw_border(cc);
@@ -236,7 +234,7 @@ group_sticky_toggle_enter(struct client_ctx *cc)
 void
 group_sticky_toggle_exit(struct client_ctx *cc)
 {
-	cc->highlight = 0;
+	cc->flags &= ~CLIENT_HIGHLIGHT;
 	client_draw_border(cc);
 }
 
@@ -271,12 +269,8 @@ group_hidetoggle(struct screen_ctx *sc, int idx)
 
 	if (gc->hidden)
 		group_show(sc, gc);
-	else {
+	else
 		group_hide(sc, gc);
-		/* XXX wtf? */
-		if (TAILQ_EMPTY(&gc->clients))
-			group_setactive(sc, idx);
-	}
 }
 
 void
@@ -329,7 +323,7 @@ group_cycle(struct screen_ctx *sc, int flags)
 	if (showgroup->hidden)
 		group_show(sc, showgroup);
 	else
-		group_setactive(sc, showgroup->shortcut - 1);
+		group_setactive(sc, showgroup->shortcut);
 }
 
 /* called when a client is deleted */
@@ -422,7 +416,7 @@ group_autogroup(struct client_ctx *cc)
 		else if (*grpno > CALMWM_NGROUPS || *grpno < 0)
 			no = CALMWM_NGROUPS - 1;
 		else
-			no = *grpno + 1;
+			no = *grpno;
 		XFree(grpno);
 	} else {
 		TAILQ_FOREACH(aw, &Conf.autogroupq, entry) {
@@ -482,7 +476,7 @@ group_update_names(struct screen_ctx *sc)
 	 */
 	if (n < CALMWM_NGROUPS) {
 		setnames = 1;
-		i = 1;
+		i = 0;
 		while (n < CALMWM_NGROUPS)
 			strings[n++] = xstrdup(shortcut_to_name[i++]);
 	}

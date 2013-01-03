@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: calmwm.h,v 1.167 2012/12/17 14:32:39 okan Exp $
+ * $OpenBSD: calmwm.h,v 1.182 2013/01/02 16:26:34 okan Exp $
  */
 
 #ifndef _CALMWM_H_
@@ -45,15 +45,12 @@
 #define	CONFFILE	".cwmrc"
 #define	WMNAME	 	"CWM"
 
-#define CHILDMASK	(SubstructureRedirectMask|SubstructureNotifyMask)
 #define BUTTONMASK	(ButtonPressMask|ButtonReleaseMask)
 #define MOUSEMASK	(BUTTONMASK|PointerMotionMask)
+#define MENUMASK 	(MOUSEMASK|ButtonMotionMask|ExposureMask)
+#define MENUGRABMASK	(MOUSEMASK|ButtonMotionMask|StructureNotifyMask)
 #define KEYMASK		(KeyPressMask|ExposureMask)
-#define MENUMASK 	(BUTTONMASK|ButtonMotionMask|ExposureMask| \
-			PointerMotionMask)
-#define MENUGRABMASK	(BUTTONMASK|ButtonMotionMask|StructureNotifyMask|\
-			PointerMotionMask)
-#define SEARCHMASK	(KeyPressMask|ExposureMask)
+#define IGNOREMODMASK	(LockMask|Mod2Mask)
 
 /* kb movement */
 #define CWM_MOVE		0x0001
@@ -78,8 +75,8 @@
 #define CWM_MENU_DUMMY		0x0001
 #define CWM_MENU_FILE		0x0002
 
-#define KBTOGROUP(X) ((X) - 1)
-
+#define ARG_CHAR		0x0001
+#define ARG_INT			0x0002
 union arg {
 	char	*c;
 	int	 i;
@@ -133,7 +130,7 @@ struct client_ctx {
 	struct screen_ctx	*sc;
 	Window			 win;
 	XSizeHints		*size;
-	Colormap		 cmap;
+	Colormap		 colormap;
 	u_int			 bwidth; /* border width */
 	struct geom		 geom, savegeom;
 	struct {
@@ -160,16 +157,16 @@ struct client_ctx {
 #define CLIENT_VMAXIMIZED		0x0004
 #define CLIENT_HMAXIMIZED		0x0008
 #define CLIENT_FREEZE			0x0010
+#define CLIENT_GROUP			0x0020
+#define CLIENT_UNGROUP			0x0040
 
+#define CLIENT_HIGHLIGHT		(CLIENT_GROUP | CLIENT_UNGROUP)
 #define CLIENT_MAXFLAGS			(CLIENT_VMAXIMIZED | CLIENT_HMAXIMIZED)
 #define CLIENT_MAXIMIZED		(CLIENT_VMAXIMIZED | CLIENT_HMAXIMIZED)
 	int			 flags;
 	int			 state;
 	int			 active;
 	int			 stackingorder;
-#define CLIENT_HIGHLIGHT_GROUP		0x0001
-#define CLIENT_HIGHLIGHT_UNGROUP	0x0002
-	int			 highlight;
 	struct winname_q	 nameq;
 #define CLIENT_MAXNAMEQLEN		5
 	int			 nameqlen;
@@ -211,6 +208,8 @@ TAILQ_HEAD(autogroupwin_q, autogroupwin);
 struct screen_ctx {
 	TAILQ_ENTRY(screen_ctx)	 entry;
 	u_int			 which;
+	Visual			*visual;
+	Colormap		 colormap;
 	Window			 rootwin;
 	Window			 menuwin;
 	struct color		 color[CWM_COLOR_MAX];
@@ -224,7 +223,7 @@ struct screen_ctx {
 	XftFont			*xftfont;
 	int			 xinerama_no;
 	XineramaScreenInfo	*xinerama;
-#define CALMWM_NGROUPS		 9
+#define CALMWM_NGROUPS		 10
 	struct group_ctx	 groups[CALMWM_NGROUPS];
 	struct group_ctx_q	 groupq;
 	int			 group_hideall;
@@ -243,6 +242,7 @@ struct keybinding {
 	int			 keycode;
 #define KBFLAG_NEEDCLIENT	 0x0001
 	int			 flags;
+	int			 argtype;
 };
 TAILQ_HEAD(keybinding_q, keybinding);
 
@@ -259,7 +259,6 @@ TAILQ_HEAD(mousebinding_q, mousebinding);
 
 struct cmd {
 	TAILQ_ENTRY(cmd)	entry;
-	int			flags;
 	char			image[MAXPATHLEN];
 #define CMD_MAXLABELLEN		256
 	char			label[CMD_MAXLABELLEN];
@@ -297,6 +296,7 @@ struct conf {
 	char		 	*menucolor[CWM_COLOR_MENU_MAX];
 	char			 termpath[MAXPATHLEN];
 	char			 lockpath[MAXPATHLEN];
+	char			 known_hosts[MAXPATHLEN];
 #define	CONF_FONT			"sans-serif:pixelsize=14:bold"
 	char			*font;
 };
@@ -332,7 +332,6 @@ void			 client_lower(struct client_ctx *);
 void			 client_map(struct client_ctx *);
 void			 client_maximize(struct client_ctx *);
 void			 client_move(struct client_ctx *);
-void			 client_mtf(struct client_ctx *);
 struct client_ctx	*client_new(Window, struct screen_ctx *, int);
 void			 client_ptrsave(struct client_ctx *);
 void			 client_ptrwarp(struct client_ctx *);
@@ -374,7 +373,7 @@ void			 search_match_text(struct menu_q *, struct menu_q *,
 			     char *);
 void			 search_print_client(struct menu *, int);
 
-XineramaScreenInfo	*screen_find_xinerama(struct screen_ctx *, int, int);
+struct geom		 screen_find_xinerama(struct screen_ctx *, int, int);
 struct screen_ctx	*screen_fromroot(Window);
 void			 screen_init(struct screen_ctx *, u_int);
 void			 screen_update_geometry(struct screen_ctx *);
@@ -439,7 +438,7 @@ int			 parse_config(const char *, struct conf *);
 void			 conf_bindname(struct conf *, char *, char *);
 void			 conf_clear(struct conf *);
 void			 conf_client(struct client_ctx *);
-void			 conf_cmd_add(struct conf *, char *, char *, int);
+void			 conf_cmd_add(struct conf *, char *, char *);
 void			 conf_color(struct conf *, struct screen_ctx *);
 void			 conf_font(struct conf *, struct screen_ctx *);
 void			 conf_gap(struct conf *, struct screen_ctx *);
@@ -447,7 +446,6 @@ void			 conf_grab(struct conf *, struct keybinding *);
 void			 conf_grab_mouse(struct client_ctx *);
 void			 conf_init(struct conf *);
 void			 conf_mousebind(struct conf *, char *, char *);
-void			 conf_setup(struct conf *, const char *);
 void			 conf_ungrab(struct conf *, struct keybinding *);
 
 int			 font_ascent(struct screen_ctx *);
@@ -519,6 +517,7 @@ extern Cursor				 Cursor_resize;
 extern struct screen_ctx_q		 Screenq;
 extern struct client_ctx_q		 Clientq;
 extern struct conf			 Conf;
+extern char				*homedir;
 
 extern int				 HasRandr, Randr_ev;
 

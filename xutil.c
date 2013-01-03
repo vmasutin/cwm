@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: xutil.c,v 1.50 2012/12/17 02:28:45 okan Exp $
+ * $OpenBSD: xutil.c,v 1.52 2013/01/01 14:19:56 okan Exp $
  */
 
 #include <sys/param.h>
@@ -411,7 +411,7 @@ xu_ewmh_net_wm_desktop(struct client_ctx *cc)
 	long			 no = 0xffffffff;
 
 	if (gc)
-		no = gc->shortcut - 1;
+		no = gc->shortcut;
 
 	XChangeProperty(X_Dpy, cc->win, ewmh[_NET_WM_DESKTOP].atom,
 	    XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&no, 1);
@@ -422,8 +422,7 @@ xu_getcolor(struct screen_ctx *sc, char *name)
 {
 	XColor	 color, tmp;
 
-	if (!XAllocNamedColor(X_Dpy, DefaultColormap(X_Dpy, sc->which),
-	    name, &color, &tmp)) {
+	if (!XAllocNamedColor(X_Dpy, sc->colormap, name, &color, &tmp)) {
 		warnx("XAllocNamedColor error: '%s'", name);
 		return (0);
 	}

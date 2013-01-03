@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: client.c,v 1.104 2012/12/17 14:26:29 okan Exp $
+ * $OpenBSD: client.c,v 1.113 2013/01/02 21:37:21 okan Exp $
  */
 
 #include <sys/param.h>
@@ -33,6 +33,7 @@
 
 static struct client_ctx	*client_mrunext(struct client_ctx *);
 static struct client_ctx	*client_mruprev(struct client_ctx *);
+static void			 client_mtf(struct client_ctx *);
 static void			 client_none(struct screen_ctx *);
 static void			 client_placecalc(struct client_ctx *);
 static void			 client_update(struct client_ctx *);
@@ -40,7 +41,6 @@ static void			 client_gethints(struct client_ctx *);
 static void			 client_freehints(struct client_ctx *);
 static int			 client_inbound(struct client_ctx *, int, int);
 
-static char		 emptystring[] = "";
 struct client_ctx	*_curcc = NULL;
 
 struct client_ctx *
@@ -91,7 +91,7 @@ client_new(Window win, struct screen_ctx *sc, int mapped)
 	cc->geom.y = wattr.y;
 	cc->geom.w = wattr.width;
 	cc->geom.h = wattr.height;
-	cc->cmap = wattr.colormap;
+	cc->colormap = wattr.colormap;
 
 	if (wattr.map_state != IsViewable) {
 		client_placecalc(cc);
@@ -165,8 +165,7 @@ client_delete(struct client_ctx *cc)
 
 	while ((wn = TAILQ_FIRST(&cc->nameq)) != NULL) {
 		TAILQ_REMOVE(&cc->nameq, wn, entry);
-		if (wn->name != emptystring)
-			free(wn->name);
+		free(wn->name);
 		free(wn);
 	}
 
@@ -201,7 +200,7 @@ client_setactive(struct client_ctx *cc, int fg)
 	sc = cc->sc;
 
 	if (fg) {
-		XInstallColormap(X_Dpy, cc->cmap);
+		XInstallColormap(X_Dpy, cc->colormap);
 		XSetInputFocus(X_Dpy, cc->win,
 		    RevertToPointerRoot, CurrentTime);
 		conf_grab_mouse(cc);
@@ -256,8 +255,7 @@ void
 client_maximize(struct client_ctx *cc)
 {
 	struct screen_ctx	*sc = cc->sc;
-	int			 x_org, y_org, xmax, ymax;
-	XineramaScreenInfo	*xine;
+	struct geom		 xine;
 
 	if (cc->flags & CLIENT_FREEZE)
 		return;
@@ -287,21 +285,11 @@ client_maximize(struct client_ctx *cc)
 	xine = screen_find_xinerama(sc,
 	    cc->geom.x + cc->geom.w / 2,
 	    cc->geom.y + cc->geom.h / 2);
-	if (xine) {
-		x_org = xine->x_org;
-		y_org = xine->y_org;
-		xmax = xine->width;
-		ymax = xine->height;
-	} else {
-		x_org = y_org = 0;
-		xmax = sc->view.w;
-		ymax = sc->view.h;
-	}
 
-	cc->geom.x = x_org + sc->gap.left;
-	cc->geom.y = y_org + sc->gap.top;
-	cc->geom.h = ymax - (sc->gap.top + sc->gap.bottom);
-	cc->geom.w = xmax - (sc->gap.left + sc->gap.right);
+	cc->geom.x = xine.x + sc->gap.left;
+	cc->geom.y = xine.y + sc->gap.top;
+	cc->geom.h = xine.h - (sc->gap.top + sc->gap.bottom);
+	cc->geom.w = xine.w - (sc->gap.left + sc->gap.right);
 	cc->bwidth = 0;
 	cc->flags |= CLIENT_MAXIMIZED;
 
@@ -313,8 +301,7 @@ void
 client_vertmaximize(struct client_ctx *cc)
 {
 	struct screen_ctx	*sc = cc->sc;
-	int			 y_org, ymax;
-	XineramaScreenInfo	*xine;
+	struct geom		 xine;
 
 	if (cc->flags & CLIENT_FREEZE)
 		return;
@@ -341,16 +328,9 @@ client_vertmaximize(struct client_ctx *cc)
 	xine = screen_find_xinerama(sc,
 	    cc->geom.x + cc->geom.w / 2,
 	    cc->geom.y + cc->geom.h / 2);
-	if (xine) {
-		y_org = xine->y_org;
-		ymax = xine->height;
-	} else {
-		y_org = 0;
-		ymax = sc->view.h;
-	}
 
-	cc->geom.y = y_org + sc->gap.top;
-	cc->geom.h = ymax - (cc->bwidth * 2) - (sc->gap.top +
+	cc->geom.y = xine.y + sc->gap.top;
+	cc->geom.h = xine.h - (cc->bwidth * 2) - (sc->gap.top +
 	    sc->gap.bottom);
 	cc->flags |= CLIENT_VMAXIMIZED;
 
@@ -362,8 +342,7 @@ void
 client_horizmaximize(struct client_ctx *cc)
 {
 	struct screen_ctx	*sc = cc->sc;
-	int			 x_org, xmax;
-	XineramaScreenInfo	*xine;
+	struct geom		 xine;
 
 	if (cc->flags & CLIENT_FREEZE)
 		return;
@@ -390,16 +369,9 @@ client_horizmaximize(struct client_ctx *cc)
 	xine = screen_find_xinerama(sc,
 	    cc->geom.x + cc->geom.w / 2,
 	    cc->geom.y + cc->geom.h / 2);
-	if (xine) {
-		x_org = xine->x_org;
-		xmax = xine->width;
-	} else {
-		x_org = 0;
-		xmax = sc->view.w;
-	}
 
-	cc->geom.x = x_org + sc->gap.left;
-	cc->geom.w = xmax - (cc->bwidth * 2) - (sc->gap.left +
+	cc->geom.x = xine.x + sc->gap.left;
+	cc->geom.w = xine.w - (cc->bwidth * 2) - (sc->gap.left +
 	    sc->gap.right);
 	cc->flags |= CLIENT_HMAXIMIZED;
 
@@ -489,7 +461,6 @@ client_unhide(struct client_ctx *cc)
 {
 	XMapRaised(X_Dpy, cc->win);
 
-	cc->highlight = 0;
 	cc->flags &= ~CLIENT_HIDDEN;
 	xu_setstate(cc, NormalState);
 	client_draw_border(cc);
@@ -502,11 +473,11 @@ client_draw_border(struct client_ctx *cc)
 	unsigned long		 pixel;
 
 	if (cc->active)
-		switch (cc->highlight) {
-		case CLIENT_HIGHLIGHT_GROUP:
+		switch (cc->flags & CLIENT_HIGHLIGHT) {
+		case CLIENT_GROUP:
 			pixel = sc->color[CWM_COLOR_BORDER_GROUP].pixel;
 			break;
-		case CLIENT_HIGHLIGHT_UNGROUP:
+		case CLIENT_UNGROUP:
 			pixel = sc->color[CWM_COLOR_BORDER_UNGROUP].pixel;
 			break;
 		default:
@@ -558,7 +529,7 @@ client_setname(struct client_ctx *cc)
 
 	if (!xu_getstrprop(cc->win, ewmh[_NET_WM_NAME].atom, &newname))
 		if (!xu_getstrprop(cc->win, XA_WM_NAME, &newname))
-			newname = emptystring;
+			newname = xstrdup("");
 
 	TAILQ_FOREACH(wn, &cc->nameq, entry)
 		if (strcmp(wn->name, newname) == 0) {
@@ -581,8 +552,7 @@ match:
 		wn = TAILQ_FIRST(&cc->nameq);
 		assert(wn != NULL);
 		TAILQ_REMOVE(&cc->nameq, wn, entry);
-		if (wn->name != emptystring)
-			free(wn->name);
+		free(wn->name);
 		free(wn);
 		cc->nameqlen--;
 	}
@@ -685,53 +655,42 @@ client_placecalc(struct client_ctx *cc)
 		if (cc->size->y > 0)
 			cc->geom.y = MIN(cc->size->y, yslack);
 	} else {
-		XineramaScreenInfo	*info;
-		int			 xmouse, ymouse, xorig, yorig;
-		int			 xmax, ymax;
+		struct geom		 xine;
+		int			 xmouse, ymouse;
 
 		xu_ptr_getpos(sc->rootwin, &xmouse, &ymouse);
-		info = screen_find_xinerama(sc, xmouse, ymouse);
-		if (info) {
-			xorig = info->x_org;
-			yorig = info->y_org;
-			xmax = xorig + info->width;
-			ymax = yorig + info->height;
-		} else {
-			xorig = yorig = 0;
-			xmax = sc->view.w;
-			ymax = sc->view.h;
-		}
-		xmouse = MAX(xmouse, xorig) - cc->geom.w / 2;
-		ymouse = MAX(ymouse, yorig) - cc->geom.h / 2;
+		xine = screen_find_xinerama(sc, xmouse, ymouse);
+		xmouse = MAX(xmouse, xine.x) - cc->geom.w / 2;
+		ymouse = MAX(ymouse, xine.y) - cc->geom.h / 2;
 
-		xmouse = MAX(xmouse, xorig);
-		ymouse = MAX(ymouse, yorig);
+		xmouse = MAX(xmouse, xine.x);
+		ymouse = MAX(ymouse, xine.y);
 
-		xslack = xmax - cc->geom.w - cc->bwidth * 2;
-		yslack = ymax - cc->geom.h - cc->bwidth * 2;
+		xslack = xine.w - cc->geom.w - cc->bwidth * 2;
+		yslack = xine.h - cc->geom.h - cc->bwidth * 2;
 
-		if (xslack >= xorig) {
+		if (xslack >= xine.x) {
 			cc->geom.x = MAX(MIN(xmouse, xslack),
-			    xorig + sc->gap.left);
+			    xine.x + sc->gap.left);
 			if (cc->geom.x > (xslack - sc->gap.right))
 				cc->geom.x -= sc->gap.right;
 		} else {
-			cc->geom.x = xorig + sc->gap.left;
-			cc->geom.w = xmax - sc->gap.left;
+			cc->geom.x = xine.x + sc->gap.left;
+			cc->geom.w = xine.w - sc->gap.left;
 		}
-		if (yslack >= yorig) {
+		if (yslack >= xine.y) {
 			cc->geom.y = MAX(MIN(ymouse, yslack),
-			    yorig + sc->gap.top);
+			    xine.y + sc->gap.top);
 			if (cc->geom.y > (yslack - sc->gap.bottom))
 				cc->geom.y -= sc->gap.bottom;
 		} else {
-			cc->geom.y = yorig + sc->gap.top;
-			cc->geom.h = ymax - sc->gap.top;
+			cc->geom.y = xine.y + sc->gap.top;
+			cc->geom.h = xine.h - sc->gap.top;
 		}
 	}
 }
 
-void
+static void
 client_mtf(struct client_ctx *cc)
 {
 	struct screen_ctx	*sc;
@@ -742,8 +701,6 @@ client_mtf(struct client_ctx *cc)
 		return;
 
 	sc = cc->sc;
-
-	/* Move to front. */
 	TAILQ_REMOVE(&sc->mruq, cc, mru_entry);
 	TAILQ_INSERT_HEAD(&sc->mruq, cc, mru_entry);
 }
@@ -878,7 +835,7 @@ client_transient(struct client_ctx *cc)
 
 	if (XGetTransientForHint(X_Dpy, cc->win, &trans)) {
 		if ((tc = client_find(trans)) && tc->group) {
-			group_movetogroup(cc, tc->group->shortcut - 1);
+			group_movetogroup(cc, tc->group->shortcut);
 			if (tc->flags & CLIENT_IGNORE)
 				cc->flags |= CLIENT_IGNORE;
 		}
@@ -893,19 +850,17 @@ client_inbound(struct client_ctx *cc, int x, int y)
 }
 
 int
-client_snapcalc(int n, int dn, int nmax, int bwidth, int snapdist)
+client_snapcalc(int n0, int n1, int e0, int e1, int snapdist)
 {
-	int	 n0, n1, s0, s1;
+	int	 s0, s1;
 
 	s0 = s1 = 0;
-	n0 = n;
-	n1 = n + dn + (bwidth * 2);
 
-	if (abs(n0) <= snapdist)
-		s0 = -n0;
+	if (abs(e0 - n0) <= snapdist)
+		s0 = e0 - n0;
 
-	if (nmax - snapdist <= n1 && n1 <= nmax + snapdist)
-		s1 = nmax - n1;
+	if (abs(e1 - n1) <= snapdist)
+		s1 = e1 - n1;
 
 	/* possible to snap in both directions */
 	if (s0 != 0 && s1 != 0)

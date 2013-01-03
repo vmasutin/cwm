@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: kbfunc.c,v 1.69 2012/12/17 14:32:39 okan Exp $
+ * $OpenBSD: kbfunc.c,v 1.74 2013/01/02 21:41:14 okan Exp $
  */
 
 #include <sys/param.h>
@@ -33,7 +33,6 @@
 
 #include "calmwm.h"
 
-#define KNOWN_HOSTS	".ssh/known_hosts"
 #define HASH_MARKER	"|1|"
 
 extern char		**cwm_argv;
@@ -102,11 +101,11 @@ kbfunc_moveresize(struct client_ctx *cc, union arg *arg)
 			cc->geom.x = sc->view.w - 1;
 
 		cc->geom.x += client_snapcalc(cc->geom.x,
-		    cc->geom.w, sc->view.w,
-		    cc->bwidth, Conf.snapdist);
+		    cc->geom.x + cc->geom.w + (cc->bwidth * 2),
+		    sc->work.x, sc->work.w, Conf.snapdist);
 		cc->geom.y += client_snapcalc(cc->geom.y,
-		    cc->geom.h, sc->view.h,
-		    cc->bwidth, Conf.snapdist);
+		    cc->geom.y + cc->geom.h + (cc->bwidth * 2),
+		    sc->work.y, sc->work.h, Conf.snapdist);
 
 		client_move(cc);
 		xu_ptr_getpos(cc->win, &x, &y);
@@ -324,21 +323,16 @@ kbfunc_ssh(struct client_ctx *cc, union arg *arg)
 	struct menu		*mi;
 	struct menu_q		 menuq;
 	FILE			*fp;
-	char			*buf, *lbuf, *p, *home;
-	char			 hostbuf[MAXHOSTNAMELEN], filename[MAXPATHLEN];
+	char			*buf, *lbuf, *p;
+	char			 hostbuf[MAXHOSTNAMELEN];
 	char			 cmd[256];
 	int			 l;
 	size_t			 len;
 
-	if ((home = getenv("HOME")) == NULL)
+	if ((fp = fopen(Conf.known_hosts, "r")) == NULL) {
+		warn("kbfunc_ssh: %s", Conf.known_hosts);
 		return;
-
-	l = snprintf(filename, sizeof(filename), "%s/%s", home, KNOWN_HOSTS);
-	if (l == -1 || l >= sizeof(filename))
-		return;
-
-	if ((fp = fopen(filename, "r")) == NULL)
-		return;
+	}
 
 	TAILQ_INIT(&menuq);
 	lbuf = NULL;
@@ -412,13 +406,13 @@ kbfunc_client_delete(struct client_ctx *cc, union arg *arg)
 void
 kbfunc_client_group(struct client_ctx *cc, union arg *arg)
 {
-	group_hidetoggle(cc->sc, KBTOGROUP(arg->i));
+	group_hidetoggle(cc->sc, arg->i);
 }
 
 void
 kbfunc_client_grouponly(struct client_ctx *cc, union arg *arg)
 {
-	group_only(cc->sc, KBTOGROUP(arg->i));
+	group_only(cc->sc, arg->i);
 }
 
 void
@@ -446,7 +440,7 @@ kbfunc_client_grouptoggle(struct client_ctx *cc, union arg *arg)
 void
 kbfunc_client_movetogroup(struct client_ctx *cc, union arg *arg)
 {
-	group_movetogroup(cc, KBTOGROUP(arg->i));
+	group_movetogroup(cc, arg->i);
 }
 
 void

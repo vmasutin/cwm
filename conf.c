@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: conf.c,v 1.112 2012/12/17 02:53:29 okan Exp $
+ * $OpenBSD: conf.c,v 1.117 2013/01/01 14:33:52 okan Exp $
  */
 
 #include <sys/param.h>
@@ -36,7 +36,7 @@ static void	 conf_unbind(struct conf *, struct keybinding *);
 
 /* Add an command menu entry to the end of the menu */
 void
-conf_cmd_add(struct conf *c, char *image, char *label, int flags)
+conf_cmd_add(struct conf *c, char *image, char *label)
 {
 	/* "term" and "lock" have special meanings. */
 
@@ -46,7 +46,6 @@ conf_cmd_add(struct conf *c, char *image, char *label, int flags)
 		(void)strlcpy(c->lockpath, image, sizeof(c->lockpath));
 	else {
 		struct cmd *cmd = xmalloc(sizeof(*cmd));
-		cmd->flags = flags;
 		(void)strlcpy(cmd->image, image, sizeof(cmd->image));
 		(void)strlcpy(cmd->label, label, sizeof(cmd->label));
 		TAILQ_INSERT_TAIL(&c->cmdq, cmd, entry);
@@ -166,7 +165,8 @@ conf_init(struct conf *c)
 {
 	int	i;
 
-	c->flags = 0;
+	bzero(c, sizeof(*c));
+
 	c->bwidth = CONF_BWIDTH;
 	c->mamount = CONF_MAMOUNT;
 	c->snapdist = CONF_SNAPDIST;
@@ -192,6 +192,9 @@ conf_init(struct conf *c)
 	/* Default term/lock */
 	(void)strlcpy(c->termpath, "xterm", sizeof(c->termpath));
 	(void)strlcpy(c->lockpath, "xlock", sizeof(c->lockpath));
+
+	(void)snprintf(c->known_hosts, sizeof(c->known_hosts), "%s/%s",
+	    homedir, ".ssh/known_hosts");
 
 	c->font = xstrdup(CONF_FONT);
 }
@@ -237,38 +240,6 @@ conf_clear(struct conf *c)
 		free(c->color[i].name);
 
 	free(c->font);
-}
-
-void
-conf_setup(struct conf *c, const char *conf_file)
-{
-	char		 conf_path[MAXPATHLEN];
-	char		*home;
-	struct stat	 sb;
-	int		 parse = 0;
-
-	conf_init(c);
-
-	if (conf_file == NULL) {
-		if ((home = getenv("HOME")) == NULL)
-			errx(1, "No HOME directory.");
-
-		(void)snprintf(conf_path, sizeof(conf_path), "%s/%s",
-		    home, CONFFILE);
-
-		if (stat(conf_path, &sb) == 0 && (sb.st_mode & S_IFREG))
-			parse = 1;
-	} else {
-		if (stat(conf_file, &sb) == -1 || !(sb.st_mode & S_IFREG))
-			errx(1, "%s: %s", conf_file, strerror(errno));
-		else {
-			(void)strlcpy(conf_path, conf_file, sizeof(conf_path));
-			parse = 1;
-		}
-	}
-
-	if (parse && (parse_config(conf_path, c) == -1))
-		warnx("config file %s has errors, not loading", conf_path);
 }
 
 void
@@ -499,14 +470,16 @@ conf_bindname(struct conf *c, char *name, char *binding)
 		current_binding->callback = name_to_kbfunc[i].handler;
 		current_binding->flags = name_to_kbfunc[i].flags;
 		current_binding->argument = name_to_kbfunc[i].argument;
+		current_binding->argtype |= ARG_INT;
 		conf_grab(c, current_binding);
 		TAILQ_INSERT_TAIL(&c->keybindingq, current_binding, entry);
 		return;
 	}
 
 	current_binding->callback = kbfunc_cmdexec;
-	current_binding->argument.c = xstrdup(binding);
 	current_binding->flags = 0;
+	current_binding->argument.c = xstrdup(binding);
+	current_binding->argtype |= ARG_CHAR;
 	conf_grab(c, current_binding);
 	TAILQ_INSERT_TAIL(&c->keybindingq, current_binding, entry);
 }
@@ -525,6 +498,8 @@ conf_unbind(struct conf *c, struct keybinding *unbind)
 		    key->keysym == unbind->keysym) {
 			conf_ungrab(c, key);
 			TAILQ_REMOVE(&c->keybindingq, key, entry);
+			if (key->argtype & ARG_CHAR)
+				free(key->argument.c);
 			free(key);
 		}
 	}
