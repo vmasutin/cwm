@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: client.c,v 1.113 2013/01/02 21:37:21 okan Exp $
+ * $OpenBSD: client.c,v 1.119 2013/01/08 15:16:05 okan Exp $
  */
 
 #include <sys/param.h>
@@ -286,10 +286,7 @@ client_maximize(struct client_ctx *cc)
 	    cc->geom.x + cc->geom.w / 2,
 	    cc->geom.y + cc->geom.h / 2);
 
-	cc->geom.x = xine.x + sc->gap.left;
-	cc->geom.y = xine.y + sc->gap.top;
-	cc->geom.h = xine.h - (sc->gap.top + sc->gap.bottom);
-	cc->geom.w = xine.w - (sc->gap.left + sc->gap.right);
+	cc->geom = xine;
 	cc->bwidth = 0;
 	cc->flags |= CLIENT_MAXIMIZED;
 
@@ -298,7 +295,7 @@ resize:
 }
 
 void
-client_vertmaximize(struct client_ctx *cc)
+client_vmaximize(struct client_ctx *cc)
 {
 	struct screen_ctx	*sc = cc->sc;
 	struct geom		 xine;
@@ -321,7 +318,7 @@ client_vertmaximize(struct client_ctx *cc)
 
 	/* if this will make us fully maximized then remove boundary */
 	if ((cc->flags & CLIENT_MAXFLAGS) == CLIENT_HMAXIMIZED) {
-		cc->geom.w += Conf.bwidth * 2;
+		cc->geom.w += cc->bwidth * 2;
 		cc->bwidth = 0;
 	}
 
@@ -329,9 +326,8 @@ client_vertmaximize(struct client_ctx *cc)
 	    cc->geom.x + cc->geom.w / 2,
 	    cc->geom.y + cc->geom.h / 2);
 
-	cc->geom.y = xine.y + sc->gap.top;
-	cc->geom.h = xine.h - (cc->bwidth * 2) - (sc->gap.top +
-	    sc->gap.bottom);
+	cc->geom.y = xine.y;
+	cc->geom.h = xine.h - (cc->bwidth * 2);
 	cc->flags |= CLIENT_VMAXIMIZED;
 
 resize:
@@ -339,7 +335,7 @@ resize:
 }
 
 void
-client_horizmaximize(struct client_ctx *cc)
+client_hmaximize(struct client_ctx *cc)
 {
 	struct screen_ctx	*sc = cc->sc;
 	struct geom		 xine;
@@ -370,9 +366,8 @@ client_horizmaximize(struct client_ctx *cc)
 	    cc->geom.x + cc->geom.w / 2,
 	    cc->geom.y + cc->geom.h / 2);
 
-	cc->geom.x = xine.x + sc->gap.left;
-	cc->geom.w = xine.w - (cc->bwidth * 2) - (sc->gap.left +
-	    sc->gap.right);
+	cc->geom.x = xine.x;
+	cc->geom.w = xine.w - (cc->bwidth * 2);
 	cc->flags |= CLIENT_HMAXIMIZED;
 
 resize:
@@ -475,17 +470,17 @@ client_draw_border(struct client_ctx *cc)
 	if (cc->active)
 		switch (cc->flags & CLIENT_HIGHLIGHT) {
 		case CLIENT_GROUP:
-			pixel = sc->color[CWM_COLOR_BORDER_GROUP].pixel;
+			pixel = sc->color[CWM_COLOR_BORDER_GROUP];
 			break;
 		case CLIENT_UNGROUP:
-			pixel = sc->color[CWM_COLOR_BORDER_UNGROUP].pixel;
+			pixel = sc->color[CWM_COLOR_BORDER_UNGROUP];
 			break;
 		default:
-			pixel = sc->color[CWM_COLOR_BORDER_ACTIVE].pixel;
+			pixel = sc->color[CWM_COLOR_BORDER_ACTIVE];
 			break;
 		}
 	else
-		pixel = sc->color[CWM_COLOR_BORDER_INACTIVE].pixel;
+		pixel = sc->color[CWM_COLOR_BORDER_INACTIVE];
 
 	XSetWindowBorderWidth(X_Dpy, cc->win, cc->bwidth);
 	XSetWindowBorder(X_Dpy, cc->win, pixel);
@@ -660,6 +655,8 @@ client_placecalc(struct client_ctx *cc)
 
 		xu_ptr_getpos(sc->rootwin, &xmouse, &ymouse);
 		xine = screen_find_xinerama(sc, xmouse, ymouse);
+		xine.w += xine.x;
+		xine.h += xine.y;
 		xmouse = MAX(xmouse, xine.x) - cc->geom.w / 2;
 		ymouse = MAX(ymouse, xine.y) - cc->geom.h / 2;
 
@@ -670,22 +667,16 @@ client_placecalc(struct client_ctx *cc)
 		yslack = xine.h - cc->geom.h - cc->bwidth * 2;
 
 		if (xslack >= xine.x) {
-			cc->geom.x = MAX(MIN(xmouse, xslack),
-			    xine.x + sc->gap.left);
-			if (cc->geom.x > (xslack - sc->gap.right))
-				cc->geom.x -= sc->gap.right;
+			cc->geom.x = MAX(MIN(xmouse, xslack), xine.x);
 		} else {
-			cc->geom.x = xine.x + sc->gap.left;
-			cc->geom.w = xine.w - sc->gap.left;
+			cc->geom.x = xine.x;
+			cc->geom.w = xine.w;
 		}
 		if (yslack >= xine.y) {
-			cc->geom.y = MAX(MIN(ymouse, yslack),
-			    xine.y + sc->gap.top);
-			if (cc->geom.y > (yslack - sc->gap.bottom))
-				cc->geom.y -= sc->gap.bottom;
+			cc->geom.y = MAX(MIN(ymouse, yslack), xine.y);
 		} else {
-			cc->geom.y = xine.y + sc->gap.top;
-			cc->geom.h = xine.h - sc->gap.top;
+			cc->geom.y = xine.y;
+			cc->geom.h = xine.h;
 		}
 	}
 }
@@ -874,4 +865,122 @@ client_snapcalc(int n0, int n1, int e0, int e1, int snapdist)
 		return (s1);
 	else
 		return (0);
+}
+
+void
+client_htile(struct client_ctx *cc)
+{
+	struct client_ctx	*ci;
+	struct group_ctx 	*gc = cc->group;
+	struct screen_ctx 	*sc = cc->sc;
+	struct geom 		 xine;
+	int 			 i, n, mh, x, h, w;
+
+	if (!gc)
+		return;
+	i = n = 0;
+
+	TAILQ_FOREACH(ci, &gc->clients, group_entry) {
+		if (ci->flags & CLIENT_HIDDEN ||
+		    ci->flags & CLIENT_IGNORE || (ci == cc))
+			continue;
+		n++;
+	}
+	if (n == 0)
+		return;
+
+	xine = screen_find_xinerama(sc,
+	    cc->geom.x + cc->geom.w / 2,
+	    cc->geom.y + cc->geom.h / 2);
+
+	if (cc->flags & CLIENT_VMAXIMIZED ||
+	    cc->geom.h + (cc->bwidth * 2) >= xine.h)
+		return;
+
+	cc->flags &= ~CLIENT_HMAXIMIZED;
+	cc->geom.x = xine.x;
+	cc->geom.y = xine.y;
+	cc->geom.w = xine.w - (cc->bwidth * 2);
+	client_resize(cc, 1);
+	client_ptrwarp(cc);
+
+	mh = cc->geom.h + (cc->bwidth * 2);
+	x = xine.x;
+	w = xine.w / n;
+	h = xine.h - mh;
+	TAILQ_FOREACH(ci, &gc->clients, group_entry) {
+		if (ci->flags & CLIENT_HIDDEN ||
+		    ci->flags & CLIENT_IGNORE || (ci == cc))
+			continue;
+		ci->bwidth = Conf.bwidth;
+		ci->geom.y = xine.y + mh;
+		ci->geom.x = x;
+		ci->geom.h = h - (ci->bwidth * 2);
+		ci->geom.w = w - (ci->bwidth * 2);
+		if (i + 1 == n)
+			ci->geom.w = xine.x + xine.w -
+			    ci->geom.x - (ci->bwidth * 2);
+		x += w;
+		client_resize(ci, 1);
+		i++;
+	}
+}
+
+void
+client_vtile(struct client_ctx *cc)
+{
+	struct client_ctx	*ci;
+	struct group_ctx 	*gc = cc->group;
+	struct screen_ctx 	*sc = cc->sc;
+	struct geom 		 xine;
+	int 			 i, n, mw, y, h, w;
+
+	if (!gc)
+		return;
+	i = n = 0;
+
+	TAILQ_FOREACH(ci, &gc->clients, group_entry) {
+		if (ci->flags & CLIENT_HIDDEN ||
+		    ci->flags & CLIENT_IGNORE || (ci == cc))
+			continue;
+		n++;
+	}
+	if (n == 0)
+		return;
+
+	xine = screen_find_xinerama(sc,
+	    cc->geom.x + cc->geom.w / 2,
+	    cc->geom.y + cc->geom.h / 2);
+
+	if (cc->flags & CLIENT_HMAXIMIZED ||
+	    cc->geom.w + (cc->bwidth * 2) >= xine.w)
+		return;
+
+	cc->flags &= ~CLIENT_VMAXIMIZED;
+	cc->geom.x = xine.x;
+	cc->geom.y = xine.y;
+	cc->geom.h = xine.h - (cc->bwidth * 2);
+	client_resize(cc, 1);
+	client_ptrwarp(cc);
+
+	mw = cc->geom.w + (cc->bwidth * 2);
+	y = xine.y;
+	h = xine.h / n;
+	w = xine.w - mw;
+	TAILQ_FOREACH(ci, &gc->clients, group_entry) {
+		if (ci->flags & CLIENT_HIDDEN ||
+		    ci->flags & CLIENT_IGNORE || (ci == cc))
+			continue;
+		ci->bwidth = Conf.bwidth;
+		ci->geom.y = y;
+		ci->geom.x = xine.x + mw;
+		ci->geom.h = h - (ci->bwidth * 2);
+		ci->geom.w = w - (ci->bwidth * 2);
+		if (i + 1 == n)
+			ci->geom.h = xine.y + xine.h -
+			    ci->geom.y - (ci->bwidth * 2);
+		y += h;
+		client_resize(ci, 1);
+		i++;
+	}
 }

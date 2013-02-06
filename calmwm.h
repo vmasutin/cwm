@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: calmwm.h,v 1.182 2013/01/02 16:26:34 okan Exp $
+ * $OpenBSD: calmwm.h,v 1.186 2013/01/08 15:16:04 okan Exp $
  */
 
 #ifndef _CALMWM_H_
@@ -77,6 +77,10 @@
 
 #define ARG_CHAR		0x0001
 #define ARG_INT			0x0002
+
+#define CWM_TILE_HORIZ 		0x0001
+#define CWM_TILE_VERT 		0x0002
+
 union arg {
 	char	*c;
 	int	 i;
@@ -90,17 +94,12 @@ enum menucolor {
 	CWM_COLOR_MENU_MAX
 };
 
-enum cwmcolor {
+enum bordercolor {
 	CWM_COLOR_BORDER_ACTIVE,
 	CWM_COLOR_BORDER_INACTIVE,
 	CWM_COLOR_BORDER_GROUP,
 	CWM_COLOR_BORDER_UNGROUP,
-	CWM_COLOR_MAX
-};
-
-struct color {
-	char		*name;
-	unsigned long	 pixel;
+	CWM_COLOR_BORDER_MAX
 };
 
 struct geom {
@@ -212,7 +211,7 @@ struct screen_ctx {
 	Colormap		 colormap;
 	Window			 rootwin;
 	Window			 menuwin;
-	struct color		 color[CWM_COLOR_MAX];
+	unsigned long		 color[CWM_COLOR_BORDER_MAX];
 	int			 cycling;
 	struct geom		 view; /* viewable area */
 	struct geom		 work; /* workable area, gap-applied */
@@ -292,7 +291,7 @@ struct conf {
 #define	CONF_SNAPDIST			0
 	int			 snapdist;
 	struct gap		 gap;
-	struct color		 color[CWM_COLOR_MAX];
+	char			*color[CWM_COLOR_BORDER_MAX];
 	char		 	*menucolor[CWM_COLOR_MENU_MAX];
 	char			 termpath[MAXPATHLEN];
 	char			 lockpath[MAXPATHLEN];
@@ -326,7 +325,8 @@ struct client_ctx	*client_find(Window);
 void			 client_freeze(struct client_ctx *);
 void			 client_getsizehints(struct client_ctx *);
 void			 client_hide(struct client_ctx *);
-void			 client_horizmaximize(struct client_ctx *);
+void			 client_hmaximize(struct client_ctx *);
+void 			 client_htile(struct client_ctx *);
 void			 client_leave(struct client_ctx *);
 void			 client_lower(struct client_ctx *);
 void			 client_map(struct client_ctx *);
@@ -343,7 +343,8 @@ void			 client_setname(struct client_ctx *);
 int			 client_snapcalc(int, int, int, int, int);
 void			 client_transient(struct client_ctx *);
 void			 client_unhide(struct client_ctx *);
-void			 client_vertmaximize(struct client_ctx *);
+void			 client_vmaximize(struct client_ctx *);
+void 			 client_vtile(struct client_ctx *);
 void			 client_warp(struct client_ctx *);
 
 void			 group_alltoggle(struct screen_ctx *);
@@ -414,6 +415,7 @@ void			 kbfunc_quit_wm(struct client_ctx *, union arg *);
 void			 kbfunc_restart(struct client_ctx *, union arg *);
 void			 kbfunc_ssh(struct client_ctx *, union arg *);
 void			 kbfunc_term(struct client_ctx *, union arg *);
+void 			 kbfunc_tile(struct client_ctx *, union arg *);
 
 void			 mousefunc_menu_cmd(struct client_ctx *, void *);
 void			 mousefunc_menu_group(struct client_ctx *, void *);

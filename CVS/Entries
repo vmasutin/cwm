@@ -9,18 +9,18 @@
 /search.c/1.26/Result of merge//
 /util.c/1.16/Result of merge//
 /xmalloc.c/1.11/Result of merge//
-/cwmrc.5/1.51/Mon Dec 17 15:45:41 2012//
 /calmwm.c/1.72/Result of merge//
-/calmwm.h/1.182/Result of merge//
-/client.c/1.113/Result of merge//
-/conf.c/1.117/Result of merge//
 /font.c/1.24/Result of merge//
-/group.c/1.68/Result of merge//
-/kbfunc.c/1.74/Result of merge//
-/menu.c/1.50/Result of merge//
 /mousefunc.c/1.44/Result of merge//
-/parse.y/1.37/Thu Jan  3 09:30:28 2013//
-/screen.c/1.42/Result of merge//
 /xevents.c/1.70/Result of merge//
 /xutil.c/1.52/Result of merge//
+/calmwm.h/1.186/Result of merge//
+/client.c/1.119/Result of merge//
+/conf.c/1.121/Result of merge//
+/cwmrc.5/1.52/Mon Feb  4 16:40:01 2013//
+/group.c/1.70/Result of merge//
+/kbfunc.c/1.76/Result of merge//
+/menu.c/1.51/Result of merge//
+/parse.y/1.39/Mon Feb  4 16:40:01 2013//
+/screen.c/1.45/Result of merge//
 D
