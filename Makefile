@@ -2,20 +2,21 @@
 # Makefile adapted for linux
 # missing bsd functions are added (strl* and queue.h from OpenBSD and 
 # fgetln from netbsd pkgsrc
+# $OpenBSD: Makefile,v 1.20 2013/05/19 23:38:20 okan Exp $
 
 
 PROG=		cwm
 
 SRCS=		calmwm.c screen.c xmalloc.c client.c menu.c \
 		search.c util.c xutil.c conf.c  xevents.c group.c \
-		kbfunc.c mousefunc.c font.c  parse.c
+		kbfunc.c mousefunc.c   parse.c
 
 
 SRCS+=		strlcpy.c strlcat.c fgetln.c strtonum.c
 
 OBJS=		calmwm.o screen.o xmalloc.o client.o menu.o \
 		search.o util.o xutil.o conf.o xevents.o group.o \
-		kbfunc.o mousefunc.o font.o  parse.o
+		kbfunc.o mousefunc.o  parse.o
 OBJS+=		strlcpy.o strlcat.o fgetln.o strtonum.o 
 X11BASE=/usr
 CPPFLAGS+=	-Wall -g -DDEBUG -I${X11BASE}/include -I${X11BASE}/include/freetype2 -I.

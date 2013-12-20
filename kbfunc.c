@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: kbfunc.c,v 1.76 2013/01/08 15:16:05 okan Exp $
+ * $OpenBSD: kbfunc.c,v 1.85 2013/12/16 19:02:17 okan Exp $
  */
 
 #include <sys/param.h>
@@ -53,9 +53,10 @@ kbfunc_client_raise(struct client_ctx *cc, union arg *arg)
 #define TYPEMASK	(CWM_MOVE | CWM_RESIZE | CWM_PTRMOVE)
 #define MOVEMASK	(CWM_UP | CWM_DOWN | CWM_LEFT | CWM_RIGHT)
 void
-kbfunc_moveresize(struct client_ctx *cc, union arg *arg)
+kbfunc_client_moveresize(struct client_ctx *cc, union arg *arg)
 {
 	struct screen_ctx	*sc = cc->sc;
+	struct geom		 xine;
 	int			 x, y, flags, amt;
 	u_int			 mx, my;
 
@@ -88,36 +89,38 @@ kbfunc_moveresize(struct client_ctx *cc, union arg *arg)
 	}
 	switch (flags & TYPEMASK) {
 	case CWM_MOVE:
+		cc->geom.x += mx;
+		if (cc->geom.x + cc->geom.w < 0)
+			cc->geom.x = -cc->geom.w;
+		if (cc->geom.x > sc->view.w - 1)
+			cc->geom.x = sc->view.w - 1;
 		cc->geom.y += my;
 		if (cc->geom.y + cc->geom.h < 0)
 			cc->geom.y = -cc->geom.h;
 		if (cc->geom.y > sc->view.h - 1)
 			cc->geom.y = sc->view.h - 1;
 
-		cc->geom.x += mx;
-		if (cc->geom.x + cc->geom.w < 0)
-			cc->geom.x = -cc->geom.w;
-		if (cc->geom.x > sc->view.w - 1)
-			cc->geom.x = sc->view.w - 1;
-
+		xine = screen_find_xinerama(sc,
+		    cc->geom.x + cc->geom.w / 2,
+		    cc->geom.y + cc->geom.h / 2, CWM_GAP);
 		cc->geom.x += client_snapcalc(cc->geom.x,
 		    cc->geom.x + cc->geom.w + (cc->bwidth * 2),
-		    sc->work.x, sc->work.w, Conf.snapdist);
+		    xine.x, xine.x + xine.w, sc->snapdist);
 		cc->geom.y += client_snapcalc(cc->geom.y,
 		    cc->geom.y + cc->geom.h + (cc->bwidth * 2),
-		    sc->work.y, sc->work.h, Conf.snapdist);
+		    xine.y, xine.y + xine.h, sc->snapdist);
 
 		client_move(cc);
 		xu_ptr_getpos(cc->win, &x, &y);
-		cc->ptr.y = y + my;
 		cc->ptr.x = x + mx;
+		cc->ptr.y = y + my;
 		client_ptrwarp(cc);
 		break;
 	case CWM_RESIZE:
-		if ((cc->geom.h += my) < 1)
-			cc->geom.h = 1;
 		if ((cc->geom.w += mx) < 1)
 			cc->geom.w = 1;
+		if ((cc->geom.h += my) < 1)
+			cc->geom.h = 1;
 		client_resize(cc, 1);
 
 		/* Make sure the pointer stays within the window. */
@@ -251,7 +254,7 @@ kbfunc_exec(struct client_ctx *cc, union arg *arg)
 			label = "wm";
 			break;
 		default:
-			err(1, "kbfunc_exec: invalid cmd %d", cmd);
+			errx(1, "kbfunc_exec: invalid cmd %d", cmd);
 			/*NOTREACHED*/
 	}
 
@@ -306,7 +309,7 @@ kbfunc_exec(struct client_ctx *cc, union arg *arg)
 				warn("%s", mi->text);
 				break;
 			default:
-				err(1, "kb_func: egad, cmd changed value!");
+				errx(1, "kb_func: egad, cmd changed value!");
 				break;
 		}
 	}
@@ -335,6 +338,7 @@ kbfunc_ssh(struct client_ctx *cc, union arg *arg)
 	}
 
 	TAILQ_INIT(&menuq);
+
 	lbuf = NULL;
 	while ((buf = (char *) fgetln(fp, &len))) {
 		if (buf[len - 1] == '\n')
@@ -441,6 +445,12 @@ void
 kbfunc_client_movetogroup(struct client_ctx *cc, union arg *arg)
 {
 	group_movetogroup(cc, arg->i);
+}
+
+void
+kbfunc_client_fullscreen(struct client_ctx *cc, union arg *arg)
+{
+	client_fullscreen(cc);
 }
 
 void

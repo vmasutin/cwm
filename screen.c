@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: screen.c,v 1.45 2013/01/08 04:12:51 okan Exp $
+ * $OpenBSD: screen.c,v 1.53 2013/12/13 22:39:13 okan Exp $
  */
 
 #include <sys/param.h>
@@ -31,12 +31,15 @@
 #include "calmwm.h"
 
 void
-screen_init(struct screen_ctx *sc, u_int which)
+screen_init(int which)
 {
+	struct screen_ctx	*sc;
 	Window			*wins, w0, w1;
 	XWindowAttributes	 winattr;
 	XSetWindowAttributes	 rootattr;
 	u_int			 nwins, i;
+
+	sc = xcalloc(1, sizeof(*sc));
 
 	sc->which = which;
 	sc->visual = DefaultVisual(X_Dpy, sc->which);
@@ -46,20 +49,15 @@ screen_init(struct screen_ctx *sc, u_int which)
 	xu_ewmh_net_supported(sc);
 	xu_ewmh_net_supported_wm_check(sc);
 
-	conf_gap(&Conf, sc);
+	conf_screen(sc);
 
 	screen_update_geometry(sc);
 
-	conf_color(&Conf, sc);
-
-	group_init(sc);
-	conf_font(&Conf, sc);
-
 	TAILQ_INIT(&sc->mruq);
 
-	menu_init(sc);
+	group_init(sc);
 
-	rootattr.cursor = Cursor_normal;
+	rootattr.cursor = Conf.cursor[CF_NORMAL];
 	rootattr.event_mask = SubstructureRedirectMask|SubstructureNotifyMask|
 	    PropertyChangeMask|EnterWindowMask|LeaveWindowMask|
 	    ColormapChangeMask|BUTTONMASK;
@@ -75,7 +73,7 @@ screen_init(struct screen_ctx *sc, u_int which)
 		if (winattr.override_redirect ||
 		    winattr.map_state != IsViewable)
 			continue;
-		(void)client_new(wins[i], sc, winattr.map_state != IsUnmapped);
+		(void)client_init(wins[i], sc, winattr.map_state != IsUnmapped);
 	}
 	XFree(wins);
 
@@ -83,6 +81,8 @@ screen_init(struct screen_ctx *sc, u_int which)
 
 	if (HasRandr)
 		XRRSelectInput(X_Dpy, sc->rootwin, RRScreenChangeNotifyMask);
+
+	TAILQ_INSERT_TAIL(&Screenq, sc, entry);
 
 	XSync(X_Dpy, False);
 }
@@ -126,7 +126,7 @@ screen_updatestackingorder(struct screen_ctx *sc)
  * Find which xinerama screen the coordinates (x,y) is on.
  */
 struct geom
-screen_find_xinerama(struct screen_ctx *sc, int x, int y)
+screen_find_xinerama(struct screen_ctx *sc, int x, int y, int flags)
 {
 	XineramaScreenInfo	*info;
 	struct geom		 geom;
@@ -141,12 +141,18 @@ screen_find_xinerama(struct screen_ctx *sc, int x, int y)
 		info = &sc->xinerama[i];
 		if (x >= info->x_org && x < info->x_org + info->width &&
 		    y >= info->y_org && y < info->y_org + info->height) {
-			geom.x = info->x_org + sc->gap.left;
-			geom.y = info->y_org + sc->gap.top;
-			geom.w = info->width - (sc->gap.left + sc->gap.right);
-			geom.h = info->height - (sc->gap.top + sc->gap.bottom);
+			geom.x = info->x_org;
+			geom.y = info->y_org;
+			geom.w = info->width;
+			geom.h = info->height;
 			break;
 		}
+	}
+	if (flags & CWM_GAP) {
+		geom.x += sc->gap.left;
+		geom.y += sc->gap.top;
+		geom.w -= (sc->gap.left + sc->gap.right);
+		geom.h -= (sc->gap.top + sc->gap.bottom);
 	}
 	return (geom);
 }
