@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: xutil.c,v 1.83 2014/01/03 15:29:06 okan Exp $
+ * $OpenBSD: xutil.c,v 1.85 2014/02/27 00:52:57 okan Exp $
  */
 
 #include <sys/param.h>
@@ -291,11 +291,7 @@ xu_ewmh_net_desktop_names(struct screen_ctx *sc, char *data, int n)
 void
 xu_ewmh_net_wm_desktop(struct client_ctx *cc)
 {
-	struct group_ctx	*gc = cc->group;
-	long			 no = 0xffffffff;
-
-	if (gc)
-		no = gc->shortcut;
+	long	 no = cc->group->shortcut;
 
 	XChangeProperty(X_Dpy, cc->win, ewmh[_NET_WM_DESKTOP],
 	    XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&no, 1);

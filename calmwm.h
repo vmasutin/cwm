@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: calmwm.h,v 1.240 2014/01/03 15:29:06 okan Exp $
+ * $OpenBSD: calmwm.h,v 1.259 2014/02/08 02:49:30 okan Exp $
  */
 
 #ifndef _CALMWM_H_
@@ -84,9 +84,20 @@
 #define CWM_GAP			0x0001
 #define CWM_NOGAP		0x0002
 
+#define CWM_WIN			0x0001
+
+#define CWM_QUIT		0x0000
+#define CWM_RUNNING		0x0001
+#define CWM_RESTART		0x0002
+
 union arg {
 	char	*c;
 	int	 i;
+};
+
+union press {
+	KeySym		 keysym;
+	unsigned int	 button;
 };
 
 enum cursor_font {
@@ -130,6 +141,7 @@ struct winname {
 	char			*name;
 };
 TAILQ_HEAD(winname_q, winname);
+TAILQ_HEAD(ignore_q, winname);
 
 struct client_ctx {
 	TAILQ_ENTRY(client_ctx) entry;
@@ -189,13 +201,6 @@ struct client_ctx {
 TAILQ_HEAD(client_ctx_q, client_ctx);
 TAILQ_HEAD(cycle_entry_q, client_ctx);
 
-struct winmatch {
-	TAILQ_ENTRY(winmatch)	entry;
-#define WIN_MAXTITLELEN		256
-	char			title[WIN_MAXTITLELEN];
-};
-TAILQ_HEAD(winmatch_q, winmatch);
-
 struct group_ctx {
 	TAILQ_ENTRY(group_ctx)	 entry;
 	struct client_ctx_q	 clients;
@@ -214,11 +219,16 @@ struct autogroupwin {
 };
 TAILQ_HEAD(autogroupwin_q, autogroupwin);
 
+struct region_ctx {
+	TAILQ_ENTRY(region_ctx)	 entry;
+	int			 num;
+	struct geom		 area;
+};
+TAILQ_HEAD(region_ctx_q, region_ctx);
+
 struct screen_ctx {
 	TAILQ_ENTRY(screen_ctx)	 entry;
 	int			 which;
-	Visual			*visual;
-	Colormap		 colormap;
 	Window			 rootwin;
 	Window			 menuwin;
 	int			 cycling;
@@ -227,11 +237,10 @@ struct screen_ctx {
 	struct geom		 work; /* workable area, gap-applied */
 	struct gap		 gap;
 	struct cycle_entry_q	 mruq;
+	struct region_ctx_q	 regionq;
 	XftColor		 xftcolor[CWM_COLOR_NITEMS];
 	XftDraw			*xftdraw;
 	XftFont			*xftfont;
-	int			 xinerama_no;
-	XineramaScreenInfo	*xinerama;
 #define CALMWM_NGROUPS		 10
 	struct group_ctx	 groups[CALMWM_NGROUPS];
 	struct group_ctx_q	 groupq;
@@ -242,35 +251,22 @@ struct screen_ctx {
 };
 TAILQ_HEAD(screen_ctx_q, screen_ctx);
 
-struct keybinding {
-	TAILQ_ENTRY(keybinding)	 entry;
+struct binding {
+	TAILQ_ENTRY(binding)	 entry;
 	void			(*callback)(struct client_ctx *, union arg *);
 	union arg		 argument;
 	unsigned int		 modmask;
-	KeySym			 keysym;
-#define KBFLAG_NEEDCLIENT	 0x0001
+	union press		 press;
 	int			 flags;
 	int			 argtype;
 };
-TAILQ_HEAD(keybinding_q, keybinding);
-
-struct mousebinding {
-	TAILQ_ENTRY(mousebinding)	entry;
-	void			 	(*callback)(struct client_ctx *, union arg *);
-	union arg			argument;
-	unsigned int			modmask;
-	unsigned int		 	button;
-#define MOUSEBIND_CTX_ROOT		0x0001
-#define MOUSEBIND_CTX_WIN		0x0002
-	int				flags;
-};
-TAILQ_HEAD(mousebinding_q, mousebinding);
+TAILQ_HEAD(keybinding_q, binding);
+TAILQ_HEAD(mousebinding_q, binding);
 
 struct cmd {
-	TAILQ_ENTRY(cmd)	entry;
-	char			image[MAXPATHLEN];
-#define CMD_MAXLABELLEN		256
-	char			label[CMD_MAXLABELLEN];
+	TAILQ_ENTRY(cmd)	 entry;
+	char			*name;
+	char			 path[MAXPATHLEN];
 };
 TAILQ_HEAD(cmd_q, cmd);
 
@@ -288,10 +284,10 @@ TAILQ_HEAD(menu_q, menu);
 
 struct conf {
 	struct keybinding_q	 keybindingq;
-	struct autogroupwin_q	 autogroupq;
-	struct winmatch_q	 ignoreq;
-	struct cmd_q		 cmdq;
 	struct mousebinding_q	 mousebindingq;
+	struct autogroupwin_q	 autogroupq;
+	struct ignore_q		 ignoreq;
+	struct cmd_q		 cmdq;
 #define	CONF_STICKY_GROUPS		0x0001
 	int			 flags;
 #define CONF_BWIDTH			1
@@ -328,7 +324,7 @@ extern Time				 Last_Event_Time;
 extern struct screen_ctx_q		 Screenq;
 extern struct client_ctx_q		 Clientq;
 extern struct conf			 Conf;
-extern char				*homedir;
+extern const char			*homedir;
 extern int				 HasRandr, Randr_ev;
 
 enum {
@@ -395,7 +391,7 @@ void			 client_map(struct client_ctx *);
 void			 client_maximize(struct client_ctx *);
 void			 client_msg(struct client_ctx *, Atom, Time);
 void			 client_move(struct client_ctx *);
-struct client_ctx	*client_init(Window, struct screen_ctx *, int);
+struct client_ctx	*client_init(Window, struct screen_ctx *);
 void			 client_ptrsave(struct client_ctx *);
 void			 client_ptrwarp(struct client_ctx *);
 void			 client_raise(struct client_ctx *);
@@ -421,6 +417,7 @@ void			 group_init(struct screen_ctx *);
 void			 group_menu(struct screen_ctx *);
 void			 group_movetogroup(struct client_ctx *, int);
 void			 group_only(struct screen_ctx *, int);
+void			 group_set_state(struct screen_ctx *);
 void			 group_sticky(struct client_ctx *);
 void			 group_sticky_toggle_enter(struct client_ctx *);
 void			 group_sticky_toggle_exit(struct client_ctx *);
@@ -476,29 +473,18 @@ void			 kbfunc_client_search(struct client_ctx *, union arg *);
 void			 kbfunc_client_vmaximize(struct client_ctx *,
 			     union arg *);
 void			 kbfunc_cmdexec(struct client_ctx *, union arg *);
+void			 kbfunc_cwm_status(struct client_ctx *, union arg *);
 void			 kbfunc_exec(struct client_ctx *, union arg *);
 void			 kbfunc_lock(struct client_ctx *, union arg *);
-void			 kbfunc_menu_search(struct client_ctx *, union arg *);
-void			 kbfunc_quit_wm(struct client_ctx *, union arg *);
-void			 kbfunc_restart(struct client_ctx *, union arg *);
+void			 kbfunc_menu_cmd(struct client_ctx *, union arg *);
 void			 kbfunc_ssh(struct client_ctx *, union arg *);
 void			 kbfunc_term(struct client_ctx *, union arg *);
 void 			 kbfunc_tile(struct client_ctx *, union arg *);
 
-void			 mousefunc_client_cyclegroup(struct client_ctx *,
-			    union arg *);
 void			 mousefunc_client_grouptoggle(struct client_ctx *,
 			    union arg *);
-void			 mousefunc_client_hide(struct client_ctx *,
-    			    union arg *);
-void			 mousefunc_client_lower(struct client_ctx *,
-    			    union arg *);
 void			 mousefunc_client_move(struct client_ctx *,
     			    union arg *);
-void			 mousefunc_client_raise(struct client_ctx *,
-    			    union arg *);
-void			 mousefunc_client_rcyclegroup(struct client_ctx *,
-    			   union arg *);
 void			 mousefunc_client_resize(struct client_ctx *,
     			    union arg *);
 void			 mousefunc_menu_cmd(struct client_ctx *, union arg *);
@@ -507,28 +493,32 @@ void			 mousefunc_menu_unhide(struct client_ctx *,
     			    union arg *);
 
 struct menu  		*menu_filter(struct screen_ctx *, struct menu_q *,
-			     char *, char *, int,
+			     const char *, const char *, int,
 			     void (*)(struct menu_q *, struct menu_q *, char *),
 			     void (*)(struct menu *, int));
+void			 menuq_add(struct menu_q *, void *, const char *, ...);
 void			 menuq_clear(struct menu_q *);
 
 int			 parse_config(const char *, struct conf *);
 
 void			 conf_atoms(void);
-void			 conf_autogroup(struct conf *, int, char *);
-void			 conf_bind_kbd(struct conf *, char *, char *);
-int			 conf_bind_mouse(struct conf *, char *, char *);
+void			 conf_autogroup(struct conf *, int, const char *);
+int			 conf_bind_kbd(struct conf *, const char *,
+    			     const char *);
+int			 conf_bind_mouse(struct conf *, const char *,
+    			     const char *);
 void			 conf_clear(struct conf *);
 void			 conf_client(struct client_ctx *);
-void			 conf_cmd_add(struct conf *, char *, char *);
+int			 conf_cmd_add(struct conf *, const char *,
+			     const char *);
 void			 conf_cursor(struct conf *);
 void			 conf_grab_kbd(Window);
 void			 conf_grab_mouse(Window);
 void			 conf_init(struct conf *);
-void			 conf_ignore(struct conf *, char *);
+void			 conf_ignore(struct conf *, const char *);
 void			 conf_screen(struct screen_ctx *);
 
-void			 xev_loop(void);
+void			 xev_process(void);
 
 void			 xu_btn_grab(Window, int, unsigned int);
 void			 xu_btn_ungrab(Window);

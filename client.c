@@ -15,7 +15,7 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $OpenBSD: client.c,v 1.168 2014/01/03 14:23:50 okan Exp $
+ * $OpenBSD: client.c,v 1.172 2014/02/06 20:58:46 okan Exp $
  */
 
 #include <sys/param.h>
@@ -55,14 +55,26 @@ client_find(Window win)
 }
 
 struct client_ctx *
-client_init(Window win, struct screen_ctx *sc, int mapped)
+client_init(Window win, struct screen_ctx *sc)
 {
 	struct client_ctx	*cc;
 	XWindowAttributes	 wattr;
 	long			 state;
+	int			 mapped;
 
 	if (win == None)
 		return (NULL);
+	if (!XGetWindowAttributes(X_Dpy, win, &wattr))
+		return (NULL);
+
+	if (sc == NULL) {
+		sc = screen_fromroot(wattr.root);
+		mapped = 1;
+	} else {
+		if (wattr.override_redirect || wattr.map_state != IsViewable)
+			return (NULL);
+		mapped = wattr.map_state != IsUnmapped;
+	}
 
 	cc = xcalloc(1, sizeof(*cc));
 
@@ -86,7 +98,6 @@ client_init(Window win, struct screen_ctx *sc, int mapped)
 	cc->ptr.x = -1;
 	cc->ptr.y = -1;
 
-	XGetWindowAttributes(X_Dpy, cc->win, &wattr);
 	cc->geom.x = wattr.x;
 	cc->geom.y = wattr.y;
 	cc->geom.w = wattr.width;
@@ -119,7 +130,6 @@ client_init(Window win, struct screen_ctx *sc, int mapped)
 	TAILQ_INSERT_TAIL(&Clientq, cc, entry);
 
 	xu_ewmh_net_client_list(sc);
-
 	xu_ewmh_restore_net_wm_state(cc);
 
 	if (mapped)
@@ -481,7 +491,8 @@ client_unhide(struct client_ctx *cc)
 void
 client_urgency(struct client_ctx *cc)
 {
-	cc->flags |= CLIENT_URGENCY;
+	if (!cc->active)
+		cc->flags |= CLIENT_URGENCY;
 }
 
 void
